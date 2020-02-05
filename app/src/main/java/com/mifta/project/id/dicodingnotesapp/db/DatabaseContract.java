@@ -11,7 +11,7 @@ public class DatabaseContract {
     private DatabaseContract(){}
 
     public static final class NoteColumns implements BaseColumns {
-        static String TABLE_NAME = "Note";
+        public static String TABLE_NAME = "Note";
         public static String TITLE = "title";
         public static String DESCRIPTION = "description";
         public static String DATE = "date";

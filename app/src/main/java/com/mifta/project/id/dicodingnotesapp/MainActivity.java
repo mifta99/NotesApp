@@ -4,16 +4,21 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.content.Context;
 import android.content.Intent;
+import android.database.ContentObserver;
 import android.database.Cursor;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.view.View;
 import android.widget.ProgressBar;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 import com.mifta.project.id.dicodingnotesapp.adapter.NoteAdapter;
+import com.mifta.project.id.dicodingnotesapp.db.DatabaseContract;
 import com.mifta.project.id.dicodingnotesapp.db.NoteHelper;
 import com.mifta.project.id.dicodingnotesapp.entity.Note;
 import com.mifta.project.id.dicodingnotesapp.helper.MappingHelper;
@@ -57,13 +62,19 @@ public class MainActivity extends AppCompatActivity implements LoadNotesCallback
         noteHelper.open();
 
         if (savedInstanceState == null) {
-            new LoadNotesAsync(noteHelper, this).execute();
+            new LoadNotesAsync(this, this).execute();
         } else {
             ArrayList<Note> list = savedInstanceState.getParcelableArrayList(EXTRA_STATE);
             if (list != null) {
                 adapter.setListNotes(list);
             }
         }
+
+        HandlerThread handlerThread = new HandlerThread("DataObserver");
+        handlerThread.start();
+        Handler handler = new Handler(handlerThread.getLooper());
+        DataObserver myObserver = new DataObserver(handler, this);
+        getContentResolver().registerContentObserver(DatabaseContract.NoteColumns.CONTENT_URI, true, myObserver);
     }
 
     @Override
@@ -95,11 +106,11 @@ public class MainActivity extends AppCompatActivity implements LoadNotesCallback
 
     private static class LoadNotesAsync extends AsyncTask<Void, Void, ArrayList<Note>> {
 
-        private final WeakReference<NoteHelper> weakNoteHelper;
+        private final WeakReference<Context> weakContext;
         private final WeakReference<LoadNotesCallback> weakCallback;
 
-        private LoadNotesAsync(NoteHelper noteHelper, LoadNotesCallback callback) {
-            weakNoteHelper = new WeakReference<>(noteHelper);
+        private LoadNotesAsync(Context context, LoadNotesCallback callback) {
+            weakContext = new WeakReference<>(context);
             weakCallback = new WeakReference<>(callback);
         }
 
@@ -111,7 +122,8 @@ public class MainActivity extends AppCompatActivity implements LoadNotesCallback
 
         @Override
         protected ArrayList<Note> doInBackground(Void... voids) {
-            Cursor dataCursor = weakNoteHelper.get().queryAll();
+            Context context = weakContext.get();
+            Cursor dataCursor = context.getContentResolver().query(DatabaseContract.NoteColumns.CONTENT_URI, null, null, null, null);
             return MappingHelper.mapCursorToArrayList(dataCursor);
         }
 
@@ -158,6 +170,19 @@ public class MainActivity extends AppCompatActivity implements LoadNotesCallback
                     showSnackbarMessage("Satu item berhasil dihapus");
                 }
             }
+        }
+    }
+
+    public static class DataObserver extends ContentObserver {
+        final Context context;
+        public DataObserver(Handler handler, Context context) {
+            super(handler);
+            this.context = context;
+        }
+        @Override
+        public void onChange(boolean selfChange) {
+            super.onChange(selfChange);
+            new LoadNotesAsync(context, (LoadNotesCallback) context).execute();
         }
     }
 

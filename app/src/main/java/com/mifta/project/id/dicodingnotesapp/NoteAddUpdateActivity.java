@@ -3,6 +3,8 @@ package com.mifta.project.id.dicodingnotesapp;
 import android.content.ContentValues;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.Menu;
@@ -24,6 +26,10 @@ import java.util.Date;
 import java.util.Locale;
 
 import com.mifta.project.id.dicodingnotesapp.db.DatabaseContract;
+import com.mifta.project.id.dicodingnotesapp.helper.MappingHelper;
+
+import static com.mifta.project.id.dicodingnotesapp.db.DatabaseContract.NoteColumns.CONTENT_URI;
+import static com.mifta.project.id.dicodingnotesapp.db.DatabaseContract.NoteColumns.DATE;
 
 public class NoteAddUpdateActivity extends AppCompatActivity implements View.OnClickListener {
     private EditText edtTitle, edtDescription;
@@ -33,6 +39,7 @@ public class NoteAddUpdateActivity extends AppCompatActivity implements View.OnC
     private Note note;
     private int position;
     private NoteHelper noteHelper;
+    private Uri uriWithId;
 
     public static final String EXTRA_NOTE = "extra_note";
     public static final String EXTRA_POSITION = "extra_position";
@@ -67,6 +74,17 @@ public class NoteAddUpdateActivity extends AppCompatActivity implements View.OnC
         String btnTitle;
 
         if (isEdit) {
+            // Uri yang di dapatkan disini akan digunakan untuk ambil data dari provider
+            // content://com.dicoding.picodiploma.mynotesapp/note/id
+            uriWithId = Uri.parse(CONTENT_URI + "/" + note.getId());
+            if (uriWithId != null) {
+                Cursor cursor = getContentResolver().query(uriWithId, null, null, null, null);
+                if (cursor != null) {
+                    note = MappingHelper.mapCursorToObject(cursor);
+                    cursor.close();
+                }
+            }
+
             actionBarTitle = "Ubah";
             btnTitle = "Update";
 
@@ -78,6 +96,7 @@ public class NoteAddUpdateActivity extends AppCompatActivity implements View.OnC
             actionBarTitle = "Tambah";
             btnTitle = "Simpan";
         }
+
 
         if (getSupportActionBar() != null) {
             getSupportActionBar().setTitle(actionBarTitle);
@@ -113,25 +132,19 @@ public class NoteAddUpdateActivity extends AppCompatActivity implements View.OnC
             values.put(DatabaseContract.NoteColumns.DESCRIPTION, description);
 
             if (isEdit) {
-                long result = noteHelper.update(String.valueOf(note.getId()), values);
-                if (result > 0) {
-                    setResult(RESULT_UPDATE, intent);
-                    finish();
-                } else {
-                    Toast.makeText(NoteAddUpdateActivity.this, "Gagal mengupdate data", Toast.LENGTH_SHORT).show();
-                }
+                // Gunakan uriWithId untuk update
+                // content://com.dicoding.picodiploma.mynotesapp/note/id
+                getContentResolver().update(uriWithId, values, null, null);
+                Toast.makeText(NoteAddUpdateActivity.this, "Satu item berhasil diedit", Toast.LENGTH_SHORT).show();
+                finish();
             } else {
                 note.setDate(getCurrentDate());
-                values.put(DatabaseContract.NoteColumns.DATE, getCurrentDate());
-                long result = noteHelper.insert(values);
-
-                if (result > 0) {
-                    note.setId((int) result);
-                    setResult(RESULT_ADD, intent);
-                    finish();
-                } else {
-                    Toast.makeText(NoteAddUpdateActivity.this, "Gagal menambah data", Toast.LENGTH_SHORT).show();
-                }
+                values.put(DATE, getCurrentDate());
+                // Gunakan content uri untuk insert
+                // content://com.dicoding.picodiploma.mynotesapp/note/
+                getContentResolver().insert(CONTENT_URI, values);
+                Toast.makeText(NoteAddUpdateActivity.this, "Satu item berhasil disimpan", Toast.LENGTH_SHORT).show();
+                finish();
             }
         }
     }
@@ -192,15 +205,11 @@ public class NoteAddUpdateActivity extends AppCompatActivity implements View.OnC
                         if (isDialogClose) {
                             finish();
                         } else {
-                            long result = noteHelper.deleteById(String.valueOf(note.getId()));
-                            if (result > 0) {
-                                Intent intent = new Intent();
-                                intent.putExtra(EXTRA_POSITION, position);
-                                setResult(RESULT_DELETE, intent);
-                                finish();
-                            } else {
-                                Toast.makeText(NoteAddUpdateActivity.this, "Gagal menghapus data", Toast.LENGTH_SHORT).show();
-                            }
+                            // Gunakan uriWithId untuk delete
+                            // content://com.dicoding.picodiploma.mynotesapp/note/id
+                            getContentResolver().delete(uriWithId, null, null);
+                            Toast.makeText(NoteAddUpdateActivity.this, "Satu item berhasil dihapus", Toast.LENGTH_SHORT).show();
+                            finish();
                         }
                     }
                 })
